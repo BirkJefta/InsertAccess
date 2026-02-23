@@ -97,3 +97,26 @@ def fetch_results(bws_path):
         if copy_path and os.path.exists(copy_path):
             os.remove(copy_path)
 
+
+
+def insert_main_players(bws_path, players):
+    all_drivers = [d for d in pyodbc.drivers() if 'Access' in d and '(*.mdb' in d]
+    if not all_drivers: return
+    
+    conn_str = f"DRIVER={{{all_drivers[0]}}};DBQ={bws_path};"
+    try:
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM PlayerNames") # Rydder tabellen før indsættelse
+        sql = "INSERT INTO PlayerNames (ID, Name, strID) VALUES (?, ?, ?)"
+        data_to_insert = [(p['ID'], p['Name'], p['strID']) for p in players]
+        cursor.executemany(sql, data_to_insert)
+        conn.commit()
+        print(f"Indsatte {len(players)} spillere i PlayerNames tabellen.")
+    except Exception as e:
+        print(f"Fejl ved indsættelse af spillere: {e}")
+        conn.rollback()
+    finally:
+        cursor.close()
+        if 'conn' in locals(): conn.close()
+
