@@ -15,6 +15,7 @@ import os
 import time
 from datetime import datetime
 from config import TEMP_DIR
+import socket
 
 
 #get tournament data from the database
@@ -43,6 +44,39 @@ def get_connection(bws_path):
         except Exception as e:
             #hvis det stadig ikke virker, så giv en fejl
             raise Exception(f"Kunne ikke åbne data {e}")
+
+#Client tabel i access
+def insert_client_info(bws_path):
+    pc_name = socket.gethostname()
+    all_drivers = [d for d in pyodbc.drivers() if 'Access' in d and '(*.mdb' in d]
+    if not all_drivers:
+        print("Ingen driver fundet")
+        return None
+    
+    conn_str = f"DRIVER={{{all_drivers[0]}}};DBQ={bws_path};"
+    try:
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
+
+        #Tjek om pc'en allerede er registreret, hvis den er gemmer vi dens ID, ellers opretter vi en ny client
+        cursor.execute("SELECT ID FROM Clients WHERE Computer = ?", (pc_name,))
+        row = cursor.fetchone()
+
+        if row:
+            client_id = row[0]
+        else:
+            cursor.execute("INSERT INTO Clients (Computer) VALUES (?)", (pc_name,))
+            cursor.execute("SELECT @@IDENTITY")
+            client_id = int(cursor.fetchone()[0])
+            conn.commit()
+        return client_id
+    except Exception as e:
+        print(f"Fejl ved indsættelse af client info: {e}")
+        return None
+    finally:
+        if 'conn' in locals(): conn.close()
+        
+
 
 def fetch_results(bws_path):
     #hent data og map dem. Send i Json format.
@@ -119,4 +153,47 @@ def insert_main_players(bws_path, players):
     finally:
         cursor.close()
         if 'conn' in locals(): conn.close()
+
+#indsæt session info i access hvis den er tom, eller opdater den hvis noget er ændret.
+def insert_session_info(bws_path,session_info):
+    all_drivers = [d for d in pyodbc.drivers() if 'Access' in d and '(*.mdb' in d]
+    if not all_drivers: return
+    
+    conn_str = f"DRIVER={{{all_drivers[0]}}};DBQ={bws_path};"
+
+    #da date og time er opdelt i access, men samlet fra api, skal det splittes.
+    name = session_info.get("Name", "")
+    raw_dt = session_info.get("StartDateTime", "1970-01-01T00:00:00").replace('Z', '')
+    dt_obj = datetime.fromisoformat(raw_dt)
+    date = dt_obj.date()
+    time = dt_obj.time()
+
+
+    try:
+        #opdaterer session info i access, hvis den allerede findes, ellers indsætter den
+        conn = pyodbc.connect(conn_str, timeout=5)
+        cursor = conn.cursor()
+        cursor.execute("SELECT ID, GUID FROM Session")
+        row = cursor.fetchone()
+        #hvis der allerede er en session, opdater den, ellers indsæt en ny
+        if row:
+            current_id = row[0]
+            sql = "UPDATE Session SET Name = ?, [Date] = ?, [Time] = ? WHERE ID = ?"
+            cursor.execute(sql, (name, date, time, current_id))
+        else:
+            sql = "INSERT INTO Session (ID, Name, [Date], [Time], GUID, Status, ShowInApp, PairsMoveAcrossField, EWReturnHome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            cursor.execute(sql, (1, name, date, time, None, 0, 0, 0, 0))
+        conn.commit()
+        
+    except Exception as e:
+        print(f"Fejl ved indsættelse eller opdatering af session info: {e}")
+
+    finally:
+        cursor.close()
+        if 'conn' in locals(): conn.close()
+
+
+
+
+
 
