@@ -184,6 +184,7 @@ def insert_session_info(bws_path,session_info):
             sql = "INSERT INTO Session (ID, Name, [Date], [Time], GUID, Status, ShowInApp, PairsMoveAcrossField, EWReturnHome) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
             cursor.execute(sql, (1, name, date, time, None, 0, 0, 0, 0))
         conn.commit()
+        return current_id
         
     except Exception as e:
         print(f"Fejl ved indsættelse eller opdatering af session info: {e}")
@@ -192,6 +193,40 @@ def insert_session_info(bws_path,session_info):
         cursor.close()
         if 'conn' in locals(): conn.close()
 
+def insert_section_info(bws_path,section_info, session_id):
+    all_drivers = [d for d in pyodbc.drivers() if 'Access' in d and '(*.mdb' in d]
+    if not all_drivers: return
+    
+    conn_str = f"DRIVER={{{all_drivers[0]}}};DBQ={bws_path};"
+    letter = section_info.get("AccessLetter", "")
+    missing_pair = section_info.get("MissingPair", 0)
+    tables = section_info.get("NoOfTables", 0)
+    session = session_id
+    scoring_type = 1 #1 for matchpoint, 2 for IMPs, 3 for Board-a-Match 4 for team. TODO: find ud af hvordan man finder korrekte
+    is_mitchell = section_info.get("IsMitchell",0)
+    winners = 1 #antal vindere. Hvis det er mitchell, så er der 2 vindere, ellers 1.
+
+    if is_mitchell == 1:
+        winners = 2
+    
+    try:
+        with pyodbc.connect(conn_str, timeout=5) as conn:
+            cursor = conn.cursor()
+            access_id = 1
+
+            cursor.execute("SELECT COUNT(*) FROM Section WHERE ID = ?", (access_id,))
+            exists = cursor.fetchone()[0] > 0
+            if exists:
+                sql = "UPDATE Section SET Letter = ?, [Tables] = ?, MissingPair = ?, EWMoveBeforePlay = ?, [Session] = ?, ScoringType = ?, Winners = ? WHERE ID = ?"
+                params = (letter, tables, missing_pair, 0, session, scoring_type, winners, access_id)
+            else:
+                sql = "INSERT INTO Section (ID, Letter, [Tables], MissingPair, EWMoveBeforePlay, [Session], ScoringType, Winners) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                params = (access_id, letter, tables, missing_pair, 0, session, scoring_type, winners)
+            
+            cursor.execute(sql, params)
+            conn.commit()
+    except Exception as e:
+        print(f"Fejl ved indsættelse af section info: {e}")
 
 
 

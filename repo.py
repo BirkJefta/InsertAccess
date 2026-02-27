@@ -50,11 +50,23 @@ def insert_players(bws_path, club_id):
 
 def get_session_info(section_id):
     try:
-        response = requests.get(f"{API_BASE_URL}/ClubTournamentsDb/sessions/{section_id}", timeout=5, verify=False)
+        response = requests.get(f"{API_BASE_URL}/ClubTournamentsDb/session/{section_id}", timeout=5, verify=False)
         if response.status_code == 200:
             return response.json()
         else:
             print(f"Fejl ved hentning af session info: {response.status_code}")
+            return None
+    except requests.RequestException as e:
+        print(f"Fejl ved API-kald: {e}")
+        return None
+
+def get_section_info(section_id):
+    try:
+        response = requests.get(f"{API_BASE_URL}/ClubTournamentsDb/section/{section_id}", timeout=5, verify=False)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Fejl ved hentning af sektion info: {response.status_code}")
             return None
     except requests.RequestException as e:
         print(f"Fejl ved API-kald: {e}")

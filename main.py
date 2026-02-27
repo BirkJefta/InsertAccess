@@ -16,6 +16,7 @@ def run_sync():
     club_id = settings["ClubId"]
     section_id = settings["SectionId"]
     bws_path = settings["path"]
+
     #sæt client info i databasen
     client_id = database.insert_client_info(bws_path)
     if client_id:
@@ -24,11 +25,16 @@ def run_sync():
         print("Kunne ikke registrere PC – Bridgemate kan have problemer med at starte.")
     #Hent session info og opdater i databasen
     session_info = repo.get_session_info(section_id)
+    active_session_id = 1
     if session_info:
-        database.insert_session_info(bws_path, session_info)
+        active_session_id = database.insert_session_info(bws_path, session_info)
     else:
         print("Kunne ikke hente session info – session data vil ikke blive opdateret.")
     
+    section_info = repo.get_section_info(section_id)
+    if section_info:
+        database.insert_section_info(bws_path, section_info, active_session_id)
+    else: print("Kunne ikke hente sektion info – sektion data vil ikke blive opdateret.")
 
     print(f"Klub: {club_id} | Sektion: {section_id}")
     print(f"Overvåger fil: {bws_path}")
